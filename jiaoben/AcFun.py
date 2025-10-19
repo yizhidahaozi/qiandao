@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+#修改时间2025年10月19日17：23
+#源码来自 猴子脚本：https://github.com/quan-ge/mokey-qinglong.git
+
 # -*- coding: utf-8 -*-
 """
 File: AcFun_auto_sign.py
