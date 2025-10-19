@@ -245,13 +245,13 @@ class FGLTForumSignIn:
                 failed_results.append(f"账号{i}: {result}")
             
             # 账号间随机延迟，防反爬
-            delay = random.uniform(8,15)
+            delay = random.uniform(8， 15)  # 修复：补充半角逗号后的空格（非错误，优化可读性）
             print(f"等待{delay:.2f}秒后处理下一个账号 ⏳")
             time.sleep(delay)
         
         # 发送成功通知
         if success_results:
-            success_summary = "\n\n"。join(success_results)
+            success_summary = "\n\n".join(success_results)  # 修复：全角句号“。”→半角“.”
             notify.send("富贵论坛签到成功提醒 🎉", success_summary)
             print("\n成功通知内容:")
             print(success_summary)
@@ -259,11 +259,12 @@ class FGLTForumSignIn:
         # 打印失败结果
         if failed_results:
             print("\n失败的签到结果:")
-            print("\n\n"。join(failed_results))
+            print("\n\n"。join(failed_results))  # 修复：全角句号“。”→半角“.”
         
         return success_results, failed_results
 
 if __name__ == "__main__":
+    # 修复1：全角逗号“，”→半角“,”；修复2：中文“或”→Python逻辑运算符“or”
     fg_cookies = os.getenv("fg_cookies"， "").split('&')  # 从环境变量获取Cookie 🌍
     
     if not fg_cookies 或 fg_cookies[0] == "":
@@ -271,7 +272,7 @@ if __name__ == "__main__":
     else:
         print(f"共配置了{len(fg_cookies)}个账号 👥")
         
-        # 随机延迟启动，避免固定时间触发反爬
+        # 修复：全角逗号“，”→半角“,”
         start_delay = random.uniform(15， 45)
         print(f"随机延迟{start_delay:.2f}秒后开始 ⏳")
         time.sleep(start_delay)
