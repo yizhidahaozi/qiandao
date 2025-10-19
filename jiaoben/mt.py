@@ -24,7 +24,7 @@ except ImportError:
     sys.exit()
 
 # 随机等待时间（秒）
-sleep_time = [1, 2]  # 随机等待1-2秒，避免请求过于频繁
+sleep_time = [10, 200]  # 随机等待1-2秒，避免请求过于频繁
 # 多账号Cookie（用&分隔，优先从环境变量读取）
 cookies = os.environ.get("MT_COOKIE", "")
 
