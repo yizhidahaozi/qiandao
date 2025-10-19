@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#修改时间2025年10月19日17：23
+#修改时间2025年10月19日17:23
 #源码来自 猴子脚本：https://github.com/quan-ge/mokey-qinglong.git
 
 # -*- coding: utf-8 -*-
@@ -207,9 +207,9 @@ class AcFun(CheckIn):
 
     # 主执行逻辑
     def main(self):
-        # 账号配置
-        DEFAULT_PHONE = ""  # 直接填写手机号
-        DEFAULT_PASSWORD = ""  # 直接填写密码
+        # 账号配置：请替换为你的手机号和密码
+        DEFAULT_PHONE = "你的手机号"  # 直接填写手机号
+        DEFAULT_PASSWORD = "你的密码"  # 直接填写密码
 
         phone = os.getenv("ACFUN_PHONE", DEFAULT_PHONE)
         password = os.getenv("ACFUN_PASSWORD", DEFAULT_PASSWORD)
@@ -250,10 +250,11 @@ class AcFun(CheckIn):
         else:
             msg_list = [
                 {"name": "📱 账号信息", "value": phone},
-                {"name": "⚠️ 错误信息", "value": f"登录失败：{res}"}
+                {"name": "⚠️ 错误信息"， "value": f"登录失败：{res}"}
             ]
 
-        return "\n"。join([f"{item['name']}: {item['value']}" for item in msg_list])
+        # 修复：将中文句号“。”改为英文句号“.”
+        return "\n".join([f"{item['name']}: {item['value']}" for item in msg_list])
 
 
 if __name__ == "__main__":
