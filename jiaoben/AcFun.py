@@ -250,7 +250,7 @@ class AcFun(CheckIn):
         else:
             msg_list = [
                 {"name": "📱 账号信息", "value": phone},
-                {"name": "⚠️ 错误信息"， "value": f"登录失败：{res}"}
+                {"name": "⚠️ 错误信息", "value": f"登录失败：{res}"}
             ]
 
         # 修复：将中文句号“。”改为英文句号“.”
