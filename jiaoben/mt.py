@@ -3,7 +3,7 @@
 
 """
 File: mt.py(MT论坛签到-青龙API版)
-Author: Mrzqd & 优化版
+Author: Mrzqd & 优化版.
 Date: 2025/10/19
 cron: 30 7 * * *
 new Env('MT论坛签到');
