@@ -245,7 +245,7 @@ class FGLTForumSignIn:
                 failed_results.append(f"账号{i}: {result}")
             
             # 账号间随机延迟，防反爬
-            delay = random.uniform(8， 15)
+            delay = random.uniform(8,15)
             print(f"等待{delay:.2f}秒后处理下一个账号 ⏳")
             time.sleep(delay)
         
