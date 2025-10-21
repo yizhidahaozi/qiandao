@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 # -- coding: utf-8 --
 # -------------------------------
-# @Author : 富贵论坛签到（精准用户名版） 🚀
+# @Author : 富贵论坛签到（指定格式版） 🚀
 # @Time : 2025/10/21
-# 核心：适配 <h2 class="mt">用户名</h2> 结构提取名字
+# 适配要求：严格按指定格式输出通知内容
 # -------------------------------
 # cron "0 8 * * *" script-path=xxx.py,tag=富贵论坛签到 ⏰
 # const $ = new Env('富贵论坛签到'); 🌐
@@ -16,20 +16,57 @@ import os
 import sys
 import random
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# 通知模块（青龙/本地兼容）
+# 通知模块兼容（青龙/本地）
 try:
     from notify import send
 except ImportError:
     def send(title, content):
-        print(f"\n【通知】{title}\n{content}")
+        print(f"\n【📢 通知】{title}\n{content}")
 
-class FGLTUserSigner:
+# XML模块容错（处理签到响应）
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    print("⚠️ 未找到xml模块，将用文本解析响应")
+    ET = None
+
+class FGLTSignWithFormat:
     def __init__(self, cookies):
-        self.cookies = self._filter_cookies(cookies)
+        # 基础配置
         self.base_url = "https://www.fglt.net/"
-        self.headers = {
+        self.cookies = self._filter_valid_cookies(cookies)
+        self.headers = self._get_browser_headers()
+        
+        # 连续签到天数存储
+        self.sign_log_file = "fgl_sign_format.log"
+        self.user_data = {
+            "sign_status": {},  # {用户名: 最后签到日期}
+            "continuous_days": {}  # {用户名: 连续签到天数}
+        }
+        self.load_sign_data()
+        
+        self.final_results = []
+
+    def _filter_valid_cookies(self, cookies):
+        """过滤含核心登录字段的Cookie（JoRn_2132_前缀）"""
+        valid = []
+        for cookie in cookies:
+            cookie = cookie.strip()
+            if cookie and "JoRn_2132_saltkey" in cookie and "JoRn_2132_auth" in cookie:
+                valid.append(cookie)
+            elif cookie:
+                print(f"⚠️ 跳过无效Cookie：{cookie[:20]}...")
+        return valid
+
+    def _get_browser_headers(self):
+        """模拟真实浏览器请求头（防反爬）"""
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"
+        ]
+        return {
             "Host": "www.fglt.net",
             "Origin": "https://www.fglt.net",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -38,114 +75,148 @@ class FGLTUserSigner:
             "Connection": "keep-alive",
             "Referer": f"{self.base_url}forum.php",
             "Upgrade-Insecure-Requests": "1",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+            "User-Agent": random.choice(user_agents)
         }
-        self.sign_log = "fgl_user_sign.json"  # 用户签到记录
-        self.user_sign_status = {}  # 存储 {用户名: 最后签到日期}
-        self.load_sign_log()
-        self.results = []
 
-    def _filter_cookies(self, cookies):
-        """过滤含核心登录字段的有效Cookie"""
-        valid = []
-        for cookie in cookies:
-            cookie = cookie.strip()
-            if cookie and "JoRn_2132_saltkey" in cookie and "JoRn_2132_auth" in cookie:
-                valid.append(cookie)
-        return valid
-
-    def load_sign_log(self):
-        """加载用户签到记录"""
+    # 数据持久化（含连续天数）
+    def load_sign_data(self):
+        """加载用户签到状态+连续天数"""
         try:
-            if os.path.exists(self.sign_log):
-                with open(self.sign_log, "r", encoding="utf-8") as f:
-                    self.user_sign_status = json.load(f)
-                print(f"✅ 加载签到记录：{list(self.user_sign_status.keys())[:1]}...")
+            if os.path.exists(self.sign_log_file):
+                with open(self.sign_log_file, "r", encoding="utf-8") as f:
+                    loaded_data = json.load(f)
+                    self.user_data["sign_status"] = loaded_data.get("sign_status", {})
+                    self.user_data["continuous_days"] = loaded_data.get("continuous_days", {})
+                print(f"✅ 加载历史数据：{len(self.user_data['sign_status'])}个用户")
             else:
-                print("ℹ️ 未找到签到记录，将创建新记录")
+                print("ℹ️ 未找到历史数据文件，将自动创建")
         except Exception as e:
-            print(f"⚠️ 加载记录失败：{str(e)}")
-            self.user_sign_status = {}
+            print(f"⚠️ 加载数据失败（重置）：{str(e)}")
+            self.user_data = {"sign_status": {}, "continuous_days": {}}
 
-    def save_sign_log(self):
-        """保存用户签到记录"""
+    def save_sign_data(self):
+        """保存用户签到状态+连续天数到本地"""
         try:
-            with open(self.sign_log, "w", encoding="utf-8") as f:
-                json.dump(self.user_sign_status, f, ensure_ascii=False, indent=2)
-            print("✅ 保存用户签到记录成功")
+            with open(self.sign_log_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    self.user_data, 
+                    f, 
+                    ensure_ascii=False, 
+                    indent=2
+                )
+            print("✅ 签到数据已保存")
         except Exception as e:
-            print(f"❌ 保存记录失败：{str(e)}")
+            print(f"❌ 保存数据失败：{str(e)}")
 
-    def _check_login(self, session):
-        """验证Cookie是否登录"""
-        try:
-            resp = session.get(self.base_url, timeout=15)
-            resp.encoding = "utf-8"
-            return "退出" in resp.text  # 登录后有“退出”按钮
-        except Exception as e:
-            print(f"❌ 登录校验失败：{str(e)}")
-            return False
+    # 核心附加信息方法
+    def get_continuous_days(self, username):
+        """计算连续签到天数"""
+        today = datetime.now().date()
+        
+        if username not in self.user_data["sign_status"]:
+            return 1
+        
+        last_sign_str = self.user_data["sign_status"][username]
+        last_sign_date = datetime.strptime(last_sign_str, "%Y-%m-%d").date()
+        delta_days = (today - last_sign_date).days
+        
+        if delta_days == 0:
+            return self.user_data["continuous_days"].get(username, 1)
+        elif delta_days == 1:
+            return self.user_data["continuous_days"].get(username, 1) + 1
+        else:
+            return 1
 
-    def get_username(self, session):
-        """精准提取用户名（适配 <h2 class="mt">用户名</h2> 结构）"""
+    def get_sign_ip(self, cookie_dict):
+        """从Cookie提取签到IP"""
+        lip_value = cookie_dict.get("JoRn_2132_lip", "")
+        if lip_value and "," in lip_value:
+            return lip_value.split(",")[0].strip()
+        elif lip_value:
+            return lip_value.strip()
+        else:
+            return "未知"
+
+    # 核心功能（适配格式）
+    def get_exact_username(self, session):
+        """精准提取用户名"""
         username = "未知用户"
-        print("\n【提取用户名】适配用户空间结构...")
+        print("\n【🔍 提取用户名】开始匹配...")
 
-        # 关键：访问个人空间页，匹配 <h2 class="mt"> 内的用户名
+        # 场景1：个人空间（优先）
         try:
-            space_url = f"{self.base_url}home.php?mod=space"
-            resp = session.get(space_url, timeout=15)
+            resp = session.get(f"{self.base_url}home.php?mod=space", timeout=15)
             resp.encoding = "utf-8"
-            # 正则匹配：<h2 class="mt"> 标签内的文本（忽略空格和换行）
             match = re.search(r'<h2 class="mt"\s*>(.*?)</h2>', resp.text, re.S)
             if match:
                 extracted = match.group(1).strip()
-                # 过滤非用户名内容（长度合理、不含网址等）
                 if len(extracted) <= 20 and "http" not in extracted:
                     username = extracted
-                    print(f"✅ 从 <h2 class=\"mt\"> 提取到用户名：{username}")
+                    print(f"✅ 从个人空间提取：{username}")
                     return username
-            print(f"ℹ️ 个人空间 <h2> 标签未匹配到有效用户名")
+            print("ℹ️ 场景1（个人空间）未匹配到")
         except Exception as e:
-            print(f"ℹ️ 个人空间请求失败：{str(e)}")
+            print(f"ℹ️ 场景1失败：{str(e)}")
 
-        # 兜底：尝试其他结构（备选逻辑）
+        # 场景2：空间设置页（备选）
         try:
-            index_resp = session.get(self.base_url, timeout=15)
-            index_resp.encoding = "utf-8"
-            match = re.search(r'欢迎(您回来，|)(.*?)<', index_resp.text, re.S)
-            if match and len(match.groups()) >=2 and match.group(2).strip():
-                username = match.group(2).strip()
-                print(f"✅ 从首页欢迎语提取用户名：{username}")
+            resp = session.get(f"{self.base_url}home.php?mod=spacecp", timeout=15)
+            resp.encoding = "utf-8"
+            match = re.search(r'<em>用户名[:：]</em>\s*<span>(.*?)</span>', resp.text, re.S)
+            if match:
+                username = match.group(1).strip()
+                print(f"✅ 从空间设置提取：{username}")
                 return username
-        except Exception:
-            pass
+            print("ℹ️ 场景2（空间设置）未匹配到")
+        except Exception as e:
+            print(f"ℹ️ 场景2失败：{str(e)}")
 
-        print(f"⚠️ 最终用户名：{username}（建议检查个人空间页结构）")
+        # 场景3：首页欢迎语（兜底）
+        try:
+            resp = session.get(self.base_url, timeout=15)
+            resp.encoding = "utf-8"
+            match = re.search(r'欢迎(您回来，|)([^<]{2,20})<', resp.text, re.S)
+            if match and match.group(2).strip():
+                username = match.group(2).strip()
+                print(f"✅ 从首页欢迎语提取：{username}")
+                return username
+            print("ℹ️ 场景3（首页）未匹配到")
+        except Exception as e:
+            print(f"ℹ️ 场景3失败：{str(e)}")
+
         return username
 
     def get_formhash(self, session):
-        """获取签到所需formhash"""
-        try:
-            resp = session.get(f"{self.base_url}plugin.php?id=dsu_amupper", timeout=15)
-            resp.encoding = "utf-8"
-            match = re.search(r'<input type="hidden" name="formhash" value="(.*?)" />', resp.text)
-            if match:
-                formhash = match.group(1)
-                print(f"✅ 获取formhash：{formhash[:6]}...")
-                return formhash
-            print("❌ 未找到formhash，签到终止")
-            return None
-        except Exception as e:
-            print(f"❌ 获取formhash失败：{str(e)}")
-            return None
+        """多页面重试获取formhash"""
+        target_pages = [
+            (f"{self.base_url}plugin.php?id=dsu_amupper", "签到页"),
+            (f"{self.base_url}forum.php", "论坛首页"),
+            (f"{self.base_url}home.php?mod=spacecp", "空间设置页")
+        ]
+        for page_url, page_name in target_pages:
+            time.sleep(random.uniform(1, 2))
+            try:
+                resp = session.get(page_url, timeout=15)
+                resp.encoding = "utf-8"
+                if "请登录" in resp.text:
+                    print(f"❌ {page_name}检测到未登录，Cookie失效")
+                    return None
+                match = re.search(r'<input type="hidden" name="formhash" value="(.*?)" />', resp.text)
+                if match:
+                    formhash = match.group(1)
+                    print(f"✅ 从{page_name}获取formhash：{formhash[:6]}...")
+                    return formhash
+                print(f"ℹ️ {page_name}未找到formhash")
+            except Exception as e:
+                print(f"❌ 访问{page_name}失败：{str(e)}")
+        return None
 
-    def sign_single(self, cookie, idx):
-        """单个账号签到（区分首次/重复）"""
+    # 签到核心逻辑（按指定格式输出）
+    def sign_single_account(self, cookie, account_idx):
+        """单个账号签到（严格按格式输出）"""
+        # 初始化会话与Cookie解析
         session = requests.Session()
         session.headers.update(self.headers)
-        
-        # 解析Cookie（处理特殊字符）
         cookie_dict = {}
         decoded_cookie = urllib.parse.unquote(cookie)
         for item in decoded_cookie.split(";"):
@@ -155,108 +226,164 @@ class FGLTUserSigner:
                 cookie_dict[key] = value
         session.cookies.update(cookie_dict)
 
-        # 登录状态校验
-        if not self._check_login(session):
-            msg = f"❌ 账号{idx}：Cookie失效，无法签到"
-            self.results.append(msg)
-            return msg
+        # 校验登录状态
+        login_valid = False
+        try:
+            resp = session.get(self.base_url, timeout=15)
+            login_valid = "退出" in resp.text
+        except Exception as e:
+            print(f"❌ 登录校验失败：{str(e)}")
+        
+        if not login_valid:
+            # 按格式输出：Cookie无效场景
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            sign_ip = self.get_sign_ip(cookie_dict)
+            result = f"👤 用户名：未知（Cookie无效）\n" \
+                     f"ℹ️ 签到状态：Cookie失效，无法登录\n" \
+                     f"🔄 连续签到：0 天\n" \
+                     f"✅ 首次成功：0个\n" \
+                     f"ℹ️ 重复签到：0个\n" \
+                     f"❌ 失败：1个\n" \
+                     f"📊 统计：\n" \
+                     f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
+                     f"⏰ 签到时间：{current_time}"
+            self.final_results.append(result)
+            print(f"\n{result}")
+            return
 
-        # 提取用户名
-        username = self.get_username(session)
-        current_user = username
-        today = datetime.now().strftime("%Y-%m-%d")
-        print(f"\n===== 处理账号{idx}（{current_user}）=====")
+        # 提取关键信息
+        username = self.get_exact_username(session)
+        sign_ip = self.get_sign_ip(cookie_dict)
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        print(f"\n===== 处理账号{account_idx}（{username}）=====")
 
-        # 检查重复签到（优先读本地记录）
-        if current_user in self.user_sign_status and self.user_sign_status[current_user] == today:
-            msg = f"ℹ️ 账号{idx}（{current_user}）：今日已签到，无需重复操作"
-            self.results.append(msg)
-            return msg
+        # 检查重复签到
+        if username in self.user_data["sign_status"] and self.user_data["sign_status"][username] == today_str:
+            continuous_days = self.get_continuous_days(username)
+            # 按格式输出：重复签到场景
+            result = f"👤 用户名：{username}\n" \
+                     f"ℹ️ 签到状态：今日已签到，无需重复操作\n" \
+                     f"🔄 连续签到：{continuous_days} 天\n" \
+                     f"✅ 首次成功：0个\n" \
+                     f"ℹ️ 重复签到：1个\n" \
+                     f"❌ 失败：1个\n" \
+                     f"📊 统计：\n" \
+                     f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
+                     f"⏰ 签到时间：{current_time}"
+            self.final_results.append(result)
+            print(result)
+            return
 
         # 获取formhash
         formhash = self.get_formhash(session)
         if not formhash:
-            msg = f"❌ 账号{idx}（{current_user}）：获取formhash失败"
-            self.results.append(msg)
-            return msg
+            # 按格式输出：formhash获取失败场景
+            result = f"👤 用户名：{username}\n" \
+                     f"ℹ️ 签到状态：获取formhash失败\n" \
+                     f"🔄 连续签到：0 天\n" \
+                     f"✅ 首次成功：0个\n" \
+                     f"ℹ️ 重复签到：0个\n" \
+                     f"❌ 失败：1个\n" \
+                     f"📊 统计：\n" \
+                     f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
+                     f"⏰ 签到时间：{current_time}"
+            self.final_results.append(result)
+            print(result)
+            return
 
-        # 执行签到请求
+        # 执行签到并按格式生成结果
         sign_url = f"{self.base_url}plugin.php?id=dsu_amupper&ppersubmit=true&formhash={formhash}&infloat=yes&handlekey=dsu_amupper&inajax=1&ajaxtarget=fwin_content_dsu_amupper"
         try:
             resp = session.post(sign_url, timeout=15)
             resp.encoding = "utf-8"
             resp_text = resp.text
-            print(f"【签到响应】状态码：{resp.status_code}")
 
-            # 识别签到结果
+            continuous_days = self.get_continuous_days(username)
+            self.user_data["sign_status"][username] = today_str
+            self.user_data["continuous_days"][username] = continuous_days
+            self.save_sign_data()
+
+            # 按格式输出：各签到场景
             if "您已签到完毕" in resp_text or "今日已签到" in resp_text:
-                self.user_sign_status[current_user] = today
-                self.save_sign_log()
-                msg = f"ℹ️ 账号{idx}（{current_user}）：今日已签到，无需重复操作"
-            elif "签到成功" in resp_text or "恭喜" in resp_text:
-                self.user_sign_status[current_user] = today
-                self.save_sign_log()
-                msg = f"✅ 账号{idx}（{current_user}）：今日首次签到成功"
+                result = f"👤 用户名：{username}\n" \
+                         f"ℹ️ 签到状态：今日已签到，无需重复操作\n" \
+                         f"🔄 连续签到：{continuous_days} 天\n" \
+                         f"✅ 首次成功：0个\n" \
+                         f"ℹ️ 重复签到：1个\n" \
+                         f"❌ 失败：0个\n" \
+                         f"📊 统计：\n" \
+                         f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
+                         f"⏰ 签到时间：{current_time}"
+            elif "签到成功" in resp_text:
+                result = f"👤 用户名：{username}\n" \
+                         f"ℹ️ 签到状态：今日首次签到成功\n" \
+                         f"🔄 连续签到：{continuous_days} 天\n" \
+                         f"✅ 首次成功：1个\n" \
+                         f"ℹ️ 重复签到：0个\n" \
+                         f"❌ 失败：0个\n" \
+                         f"📊 统计：\n" \
+                         f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
+                         f"⏰ 签到时间：{current_time}"
             else:
-                msg = f"❌ 账号{idx}（{current_user}）：签到失败（响应片段：{resp_text[:50]}）"
+                result = f"👤 用户名：{username}\n" \
+                         f"ℹ️ 签到状态：签到失败（响应异常）\n" \
+                         f"🔄 连续签到：0 天\n" \
+                         f"✅ 首次成功：0个\n" \
+                         f"ℹ️ 重复签到：0个\n" \
+                         f"❌ 失败：1个\n" \
+                         f"📊 统计：\n" \
+                         f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
+                         f"⏰ 签到时间：{current_time}"
 
-            self.results.append(msg)
-            return msg
+            self.final_results.append(result)
+            print(result)
         except Exception as e:
-            msg = f"❌ 账号{idx}（{current_user}）：请求异常（{str(e)}）"
-            self.results.append(msg)
-            return msg
+            result = f"👤 用户名：{username}\n" \
+                     f"ℹ️ 签到状态：请求异常（{str(e)}）\n" \
+                     f"🔄 连续签到：0 天\n" \
+                     f"✅ 首次成功：0个\n" \
+                     f"ℹ️ 重复签到：0个\n" \
+                     f"❌ 失败：1个\n" \
+                     f"📊 统计：\n" \
+                     f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
+                     f"⏰ 签到时间：{current_time}"
+            self.final_results.append(result)
+            print(result)
 
-    def run(self):
-        """批量执行所有账号签到"""
+    # 批量签到与结果通知
+    def run_batch_sign(self):
         if not self.cookies:
-            msg = "❌ 未检测到有效Cookie（需包含 JoRn_2132_saltkey/JoRn_2132_auth）"
-            print(msg)
-            send("富贵论坛签到 - 错误", msg)
+            error_msg = "❌ 未检测到有效Cookie，请配置fg_cookies环境变量"
+            print(error_msg)
+            send("富贵论坛签到 - 错误", error_msg)
             return
 
-        print(f"✅ 共检测到 {len(self.cookies)} 个有效Cookie，开始签到流程...")
-        # 随机延迟启动（防反爬）
+        # 启动延迟
         start_delay = random.uniform(3, 8)
-        print(f"ℹ️ 随机延迟 {start_delay:.1f} 秒后启动...")
+        print(f"✅ 共检测到{len(self.cookies)}个有效账号，{start_delay:.1f}秒后启动...")
         time.sleep(start_delay)
 
-        # 逐个账号签到
+        # 逐个签到
         for idx, cookie in enumerate(self.cookies, 1):
-            self.sign_single(cookie, idx)
-            # 账号间间隔
+            self.sign_single_account(cookie, idx)
             if idx < len(self.cookies):
                 inter_delay = random.uniform(5, 10)
-                print(f"ℹ️ 等待 {inter_delay:.1f} 秒处理下一个账号...")
+                print(f"\nℹ️ 等待{inter_delay:.1f}秒处理下一个账号...")
                 time.sleep(inter_delay)
 
-        # 汇总结果并发送通知
-        print("\n" + "="*50)
-        print("📋 富贵论坛签到结果汇总")
-        print("="*50)
-        final_content = ""
-        for res in self.results:
-            print(res)
-            final_content += res + "\n"
-        # 统计类型
-        success_num = sum(1 for res in self.results if "✅" in res)
-        repeat_num = sum(1 for res in self.results if "ℹ️" in res)
-        failed_num = len(self.results) - success_num - repeat_num
-        summary = f"\n本次签到统计：{success_num} 个首次成功，{repeat_num} 个重复签到，{failed_num} 个失败"
-        print(summary)
-        final_content += summary
-        # 发送通知
-        send("富贵论坛签到结果（精准用户名版）", final_content)
+        # 发送通知（严格按格式拼接）
+        notify_content = "\n".join(self.final_results)
+        send("富贵论坛签到结果", notify_content)
+        print("\n✅ 脚本执行完毕！")
 
+# 主程序入口
 if __name__ == "__main__":
-    # 从环境变量获取Cookie（多个用 & 分隔）
     env_cookies = os.getenv("fg_cookies", "")
     if not env_cookies:
-        print("❌ 请先配置 fg_cookies 环境变量（需包含 JoRn_2132_saltkey 和 JoRn_2132_auth）")
+        print("❌ 请配置fg_cookies环境变量（格式：Cookie1&Cookie2）")
         sys.exit(1)
-    # 分割并过滤Cookie
     cookie_list = [c.strip() for c in env_cookies.split("&") if c.strip()]
-    # 初始化并执行签到
-    signer = FGLTUserSigner(cookie_list)
-    signer.run()
-    print("\n✅ 富贵论坛签到脚本执行完毕")
+    signer = FGLTSignWithFormat(cookie_list)
+    signer.run_batch_sign()
+    sys.exit(0)
