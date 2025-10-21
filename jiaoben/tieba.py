@@ -16,7 +16,7 @@ from datetime import datetime
 
 
 class Notifier:
-    """通知工具类（精简输出，去除冗余提醒）"""
+    """📱 通知工具类（精简输出，去除冗余提醒）"""
     
     def __init__(self, push_token, ql_url, ql_token):
         self.push_token = push_token
@@ -24,14 +24,14 @@ class Notifier:
         self.ql_token = ql_token
         
     def _format_content(self, title, content):
-        """格式化通知内容为JSON格式"""
+        """📝 格式化通知内容为JSON格式"""
         if isinstance(content, dict):
             content["时间"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             return json.dumps(content, ensure_ascii=False, indent=2)
         return content
         
     def push_plus(self, title, content):
-        """PushPlus通知发送（无配置时静默跳过）"""
+        """📲 PushPlus通知发送（无配置时静默跳过）"""
         if not self.push_token:
             return None  # 不返回提示信息
             
@@ -59,7 +59,7 @@ class Notifier:
             return f"❌ PushPlus通知异常: {str(e)}"
     
     def qinglong(self, title, content):
-        """青龙面板通知发送（无配置时静默跳过）"""
+        """🐉 青龙面板通知发送（无配置时静默跳过）"""
         if not self.ql_url or not self.ql_token:
             return None  # 不返回提示信息
             
@@ -83,7 +83,7 @@ class Notifier:
             return f"❌ 青龙通知异常: {str(e)}"
     
     def send(self, title, content, level="info"):
-        """发送组合通知（只输出实际结果）"""
+        """📤 发送组合通知（只输出实际结果）"""
         results = []
         
         # 发送PushPlus通知
@@ -98,7 +98,7 @@ class Notifier:
         
         # 输出非空结果
         if results:
-            print(f"通知结果: {'; '.join(results)}")
+            print(f"📢 通知结果: {'; '.join(results)}")
         return {"push_plus": push_result, "qinglong": ql_result}
 
 
@@ -114,31 +114,31 @@ class Tieba:
 
     @staticmethod
     def login_info(session):
-        """获取登录用户信息"""
+        """🔍 获取登录用户信息"""
         try:
             response = session.get("https://zhidao.baidu.com/api/loginInfo", timeout=10)
             return response.json()
         except Exception as e:
-            return {"error": f"获取用户信息失败: {str(e)}"}
+            return {"error": f"❌ 获取用户信息失败: {str(e)}"}
 
     def valid(self):
-        """验证登录状态并获取TBS"""
+        """🔐 验证登录状态并获取TBS"""
         try:
             response = self.session.get("http://tieba.baidu.com/dc/common/tbs", timeout=10)
             res = response.json()
             if res.get("is_login") == 0:
-                return False, "登录失败，Cookie异常"
+                return False, "❌ 登录失败，Cookie异常"
             
             tbs = res.get("tbs")
             user_info = self.login_info(self.session)
             user_name = user_info.get("userName", "未知用户")
-            return tbs, user_name
+            return tbs, f"👤 {user_name}"  # 用户名前加用户表情
             
         except Exception as e:
-            return False, f"验证异常: {str(e)}"
+            return False, f"❌ 验证异常: {str(e)}"
 
     def get_tieba_list(self):
-        """获取关注的贴吧列表"""
+        """📋 获取关注的贴吧列表"""
         tieba_list = []
         try:
             # 获取第一页内容
@@ -179,11 +179,11 @@ class Tieba:
             return list(set(tieba_list))  # 去重
             
         except Exception as e:
-            print(f"获取贴吧列表失败: {str(e)}")
+            print(f"❌ 获取贴吧列表失败: {str(e)}")
             return tieba_list
 
     def sign(self, tb_name_list, tbs):
-        """执行贴吧签到"""
+        """📝 执行贴吧签到"""
         success_count = error_count = exist_count = shield_count = 0
         
         for tb_name in tb_name_list:
@@ -201,24 +201,24 @@ class Tieba:
                 res = response.json()
                 error_code = res.get("error_code", "")
                 
-                # 统计结果
+                # 统计结果（匹配对应表情）
                 if error_code == "0":
-                    success_count += 1
+                    success_count += 1  # ✅ 签到成功
                 elif error_code == "160002":
-                    exist_count += 1
+                    exist_count += 1    # ℹ️ 已签到
                 elif error_code == "340006":
-                    shield_count += 1
+                    shield_count += 1   # 🚫 被屏蔽
                 else:
-                    error_count += 1
+                    error_count += 1    # ❌ 签到失败
                     
             except Exception as e:
-                print(f"贴吧「{tb_name}」签到异常: {str(e)}")
+                print(f"❌ 贴吧「{tb_name}」签到异常: {str(e)}")
                 error_count += 1
         
         return (success_count, error_count, exist_count, shield_count, len(tb_name_list))
 
     def main(self):
-        """主执行方法"""
+        """🚀 主执行方法"""
         msg_all = ""
         for check_item in self.check_items:
             # 更新当前账号Cookie
@@ -238,7 +238,7 @@ class Tieba:
                 # 获取贴吧列表并签到
                 tb_list = self.get_tieba_list()
                 if not tb_list:
-                    msg = f"帐号信息: {user_name}\n提示: 未关注任何贴吧"
+                    msg = f"{user_name}\n📭 提示: 未关注任何贴吧"
                     msg_all += msg + "\n\n"
                     self.notifier.send(
                         title=f"百度贴吧签到通知 - {user_name}",
@@ -249,26 +249,26 @@ class Tieba:
                 # 执行签到
                 success, error, exist, shield, total = self.sign(tb_list, tbs)
                 
-                # 构建结果信息
+                # 构建结果信息（补充统计表情）
                 result = {
                     "账号": user_name,
                     "统计": {
                         "总贴吧数": total,
-                        "签到成功": success,
-                        "已签到": exist,
-                        "被屏蔽": shield,
-                        "失败": error
+                        "✅ 签到成功": success,
+                        "ℹ️ 已签到": exist,
+                        "🚫 被屏蔽": shield,
+                        "❌ 签到失败": error
                     },
-                    "状态": "✅ 签到完成"
+                    "状态": "🎉 签到完成"
                 }
                 
                 msg = (
-                    f"帐号信息: {user_name}\n"
-                    f"贴吧总数: {total}\n"
-                    f"签到成功: {success}\n"
-                    f"已经签到: {exist}\n"
-                    f"被屏蔽的: {shield}\n"
-                    f"签到失败: {error}"
+                    f"{user_name}\n"
+                    f"📊 贴吧总数: {total}\n"
+                    f"✅ 签到成功: {success}\n"
+                    f"ℹ️ 已经签到: {exist}\n"
+                    f"🚫 被屏蔽的: {shield}\n"
+                    f"❌ 签到失败: {error}"
                 )
                 msg_all += msg + "\n\n"
                 
@@ -280,7 +280,7 @@ class Tieba:
                 
             else:
                 # 登录失败处理
-                msg = f"帐号信息: {user_name}\n签到状态: {tbs}"  # tbs此处为错误信息
+                msg = f"{user_name}\n❌ 签到状态: {tbs}"  # tbs此处为错误信息
                 msg_all += msg + "\n\n"
                 self.notifier.send(
                     title=f"百度贴吧签到失败 - {user_name}",
@@ -292,12 +292,12 @@ class Tieba:
 
 
 def string_to_dict(s):
-    """解析Cookie字符串为字典"""
+    """🔧 解析Cookie字符串为字典"""
     return {'cookie': s.split('#')[0]} if '#' in s else {'cookie': s}
 
 
 def start():
-    """程序入口"""
+    """🚀 程序入口"""
     # 初始化通知器
     notifier = Notifier(
         push_token=os.environ.get('PUSH_PLUS_TOKEN', ''),
@@ -308,7 +308,7 @@ def start():
     # 获取环境变量配置
     tieback = os.getenv("tieback")
     if not tieback:
-        print("错误: 未配置tieback环境变量")
+        print("⚠️  错误: 未配置tieback环境变量")
         notifier.send(
             title="百度贴吧签到配置错误",
             content={"状态": "❌ 配置错误", "原因": "未设置tieback环境变量"},
@@ -318,7 +318,7 @@ def start():
     
     # 解析多账号
     accounts = tieback.split('#') if '#' in tieback else [tieback]
-    print(f"检测到 {len(accounts)} 个账号，开始执行签到...")
+    print(f"👥 检测到 {len(accounts)} 个账号，开始执行签到...")
     
     # 执行签到
     check_items = [string_to_dict(acc) for acc in accounts]
