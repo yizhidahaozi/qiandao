@@ -1,4 +1,5 @@
 #!/usr/bin/env python3..
+#狗篮子通知无用
 # _*_ coding:utf-8 _*_
 import base64
 import hashlib
