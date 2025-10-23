@@ -1,10 +1,10 @@
 #!/usr/bin/python3
-#修改时间：2025年10月23日21点00分（修复语法错误）
+#修改时间：2025年10月23日23点00分（移除连续/重复/失败字段）
 # -- coding: utf-8 --
 # -------------------------------
 # @Author : 富贵论坛签到（指定格式版） 🚀
 # @Time : 2025/10/21
-# 适配要求：严格按指定格式输出通知内容
+# 适配要求：严格按指定格式输出通知内容（移除连续/重复/失败字段）
 # -------------------------------
 # cron "0 8 * * *" script-path=xxx.py,tag=富贵论坛签到 ⏰
 # const $ = new Env('富贵论坛签到'); 🌐
@@ -33,13 +33,9 @@ class FGLTSignWithFormat:
         self.cookies = self._filter_valid_cookies(cookies)
         self.headers = self._get_browser_headers()
         
-        # 连续签到天数存储
-        self.sign_log_file = "fgl_sign_format.log"
-        self.user_data = {
-            "sign_status": {},  # {用户名: 最后签到日期}
-            "continuous_days": {}  # {用户名: 连续签到天数}
-        }
-        self.load_sign_data()
+        # 移除连续签到相关存储（因字段已删除，无需持久化该数据）
+        self.user_data = {"sign_status": {}}  # 仅保留签到状态用于重复校验
+        self.load_sign_data()  # 加载历史数据（不自动创建文件）
         
         self.final_results = []
 
@@ -72,54 +68,31 @@ class FGLTSignWithFormat:
             "User-Agent": random.choice(user_agents)
         }
 
-    # 数据持久化（含连续天数）
+    # 数据持久化（仅保留签到状态用于重复校验）
     def load_sign_data(self):
-        """加载用户签到状态+连续天数"""
+        """加载用户签到状态（不自动创建文件）"""
         try:
-            if os.path.exists(self.sign_log_file):
-                with open(self.sign_log_file, "r", encoding="utf-8") as f:
+            if os.path.exists("fgl_sign_format.log"):
+                with open("fgl_sign_format.log", "r", encoding="utf-8") as f:
                     loaded_data = json.load(f)
                     self.user_data["sign_status"] = loaded_data.get("sign_status", {})
-                    self.user_data["continuous_days"] = loaded_data.get("continuous_days", {})
-                print(f"✅ 加载历史数据：{len(self.user_data['sign_status'])}个用户")
-            else:
-                print("ℹ️ 未找到历史数据文件，将自动创建")
+                print(f"✅ 加载历史签到状态：{len(self.user_data['sign_status'])}个用户")
+            # 移除自动创建提示，文件不存在时不提示
         except Exception as e:
             print(f"⚠️ 加载数据失败（重置）：{str(e)}")
-            self.user_data = {"sign_status": {}, "continuous_days": {}}
+            self.user_data = {"sign_status": {}}
 
     def save_sign_data(self):
-        """保存用户签到状态+连续天数到本地"""
+        """保存用户签到状态（仅当文件已存在时）"""
         try:
-            with open(self.sign_log_file, "w", encoding="utf-8") as f:
-                json.dump(
-                    self.user_data, 
-                    f, 
-                    ensure_ascii=False, 
-                    indent=2
-                )
-            print("✅ 签到数据已保存")
+            if os.path.exists("fgl_sign_format.log"):
+                with open("fgl_sign_format.log", "w", encoding="utf-8") as f:
+                    json.dump(self.user_data, f, ensure_ascii=False, indent=2)
+                print("✅ 签到状态已保存")
+            else:
+                print("ℹ️ 历史数据文件不存在，不保存状态")
         except Exception as e:
             print(f"❌ 保存数据失败：{str(e)}")
-
-    # 核心附加信息方法
-    def get_continuous_days(self, username):
-        """计算连续签到天数"""
-        today = datetime.now().date()
-        
-        if username not in self.user_data["sign_status"]:
-            return 1
-        
-        last_sign_str = self.user_data["sign_status"][username]
-        last_sign_date = datetime.strptime(last_sign_str, "%Y-%m-%d").date()
-        delta_days = (today - last_sign_date).days
-        
-        if delta_days == 0:
-            return self.user_data["continuous_days"].get(username, 1)
-        elif delta_days == 1:
-            return self.user_data["continuous_days"].get(username, 1) + 1
-        else:
-            return 1
 
     def get_sign_ip(self, cookie_dict):
         """从Cookie提取签到IP"""
@@ -205,9 +178,9 @@ class FGLTSignWithFormat:
                 print(f"❌ 访问{page_name}失败：{str(e)}")
         return None
 
-    # 签到核心逻辑（按指定格式输出）
+    # 签到核心逻辑（移除指定字段后输出）
     def sign_single_account(self, cookie, account_idx):
-        """单个账号签到（严格按格式输出）"""
+        """单个账号签到（严格按格式输出，移除连续/重复/失败字段）"""
         # 初始化会话与Cookie解析
         session = requests.Session()
         session.headers.update(self.headers)
@@ -229,14 +202,11 @@ class FGLTSignWithFormat:
             print(f"❌ 登录校验失败：{str(e)}")
         
         if not login_valid:
-            # 按格式输出：Cookie无效场景
+            # 按格式输出：Cookie无效场景（移除指定字段）
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             sign_ip = self.get_sign_ip(cookie_dict)
             result = f"👤 用户名：未知（Cookie无效）\n" \
                      f"ℹ️ 签到状态：Cookie失效，无法登录\n" \
-                     f"🔄 连续签到：0 天\n" \
-                     f"ℹ️ 重复签到：0个\n" \
-                     f"❌ 失败：1个\n" \
                      f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
                      f"⏰ 签到时间：{current_time}"
             self.final_results.append(result)
@@ -250,15 +220,11 @@ class FGLTSignWithFormat:
         today_str = datetime.now().strftime("%Y-%m-%d")
         print(f"\n===== 处理账号{account_idx}（{username}）=====")
 
-        # 检查重复签到
+        # 检查重复签到（基于历史状态）
         if username in self.user_data["sign_status"] and self.user_data["sign_status"][username] == today_str:
-            continuous_days = self.get_continuous_days(username)
-            # 按格式输出：重复签到场景
+            # 按格式输出：重复签到场景（移除指定字段）
             result = f"👤 用户名：{username}\n" \
                      f"ℹ️ 签到状态：今日已签到，无需重复操作\n" \
-                     f"🔄 连续签到：{continuous_days} 天\n" \
-                     f"ℹ️ 重复签到：1个\n" \
-                     f"❌ 失败：0个\n" \
                      f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
                      f"⏰ 签到时间：{current_time}"
             self.final_results.append(result)
@@ -268,12 +234,9 @@ class FGLTSignWithFormat:
         # 获取formhash
         formhash = self.get_formhash(session)
         if not formhash:
-            # 按格式输出：formhash获取失败场景
+            # 按格式输出：formhash获取失败场景（移除指定字段）
             result = f"👤 用户名：{username}\n" \
                      f"ℹ️ 签到状态：获取formhash失败\n" \
-                     f"🔄 连续签到：0 天\n" \
-                     f"ℹ️ 重复签到：0个\n" \
-                     f"❌ 失败：1个\n" \
                      f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
                      f"⏰ 签到时间：{current_time}"
             self.final_results.append(result)
@@ -287,45 +250,33 @@ class FGLTSignWithFormat:
             resp.encoding = "utf-8"
             resp_text = resp.text
 
-            continuous_days = self.get_continuous_days(username)
+            # 更新签到状态（仅用于重复校验）
             self.user_data["sign_status"][username] = today_str
-            self.user_data["continuous_days"][username] = continuous_days
-            self.save_sign_data()
+            self.save_sign_data()  # 保存状态（仅当文件已存在）
 
-            # 按格式输出：各签到场景
+            # 按格式输出：各签到场景（移除指定字段）
             if "您已签到完毕" in resp_text or "今日已签到" in resp_text:
                 result = f"👤 用户名：{username}\n" \
                          f"ℹ️ 签到状态：今日已签到，无需重复操作\n" \
-                         f"🔄 连续签到：{continuous_days} 天\n" \
-                         f"ℹ️ 重复签到：1个\n" \
-                         f"❌ 失败：0个\n" \
                          f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
                          f"⏰ 签到时间：{current_time}"
             elif "签到成功" in resp_text:
                 result = f"👤 用户名：{username}\n" \
                          f"ℹ️ 签到状态：今日首次签到成功\n" \
-                         f"🔄 连续签到：{continuous_days} 天\n" \
-                         f"ℹ️ 重复签到：0个\n" \
-                         f"❌ 失败：0个\n" \
                          f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
                          f"⏰ 签到时间：{current_time}"
             else:
                 result = f"👤 用户名：{username}\n" \
                          f"ℹ️ 签到状态：签到失败（响应异常）\n" \
-                         f"🔄 连续签到：0 天\n" \
-                         f"ℹ️ 重复签到：0个\n" \
-                         f"❌ 失败：1个\n" \
                          f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
                          f"⏰ 签到时间：{current_time}"
 
             self.final_results.append(result)
             print(result)
         except Exception as e:
+            # 按格式输出：请求异常场景（移除指定字段）
             result = f"👤 用户名：{username}\n" \
                      f"ℹ️ 签到状态：请求异常（{str(e)}）\n" \
-                     f"🔄 连续签到：0 天\n" \
-                     f"ℹ️ 重复签到：0个\n" \
-                     f"❌ 失败：1个\n" \
                      f"🌐 签到IP：{sign_ip}（来自Cookie）\n" \
                      f"⏰ 签到时间：{current_time}"
             self.final_results.append(result)
@@ -352,7 +303,7 @@ class FGLTSignWithFormat:
                 print(f"\nℹ️ 等待{inter_delay:.1f}秒处理下一个账号...")
                 time.sleep(inter_delay)
 
-        # 发送通知（严格按格式拼接）
+        # 发送通知（严格按修改后格式拼接）
         notify_content = "\n".join(self.final_results)
         send("富贵论坛签到结果", notify_content)
         print("\n✅ 脚本执行完毕！")
