@@ -190,7 +190,7 @@ class FGLTActivityTask:
                     "aid": aid_str,
                     "url": f"{self.base_url}plugin.php?id=proalsupport&modac=post&submodac=detail&aid={aid_str}"
                 })
-        print(f"✅ 生成可评论活动：{len(posts)}个（ID范围250-813）")
+        print(f"✅ 生成可评论活动：{len(posts)}个（ID范围250-822）")
         return posts
 
     def do_activity_comments(self, session, username):
