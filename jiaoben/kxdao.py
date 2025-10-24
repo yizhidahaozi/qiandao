@@ -25,13 +25,12 @@ except ImportError:
 CONFIG = {
     "index_url": "https://www.kxdao.net/",
     "plugin_url": "https://www.kxdao.net/plugin.php?id=dsu_amupper",
-    # 增加多个可能的个人空间URL备选
-    "space_url_candidates": [
-        "https://www.kxdao.net/space.php",
-        "https://www.kxdao.net/space.php?do=home",
-        "https://www.kxdao.net/home.php",
-        "https://www.kxdao.net/u.php",
-        "https://www.kxdao.net/member.php?mod=space"
+    # 新增：从面包屑导航所在页面提取（根据HTML片段，推测为用户空间相关页面）
+    "username_page_candidates": [
+        "https://www.kxdao.net/space-uid-[\d]+\.html",  # 直接匹配用户空间URL（含UID）
+        "https://www.kxdao.net/home.php?mod=follow&uid=[\d]+&do=view&from=space",  # 广播页
+        "https://www.kxdao.net/home.php",  # 通用个人中心页
+        "https://www.kxdao.net/"  # 首页（若面包屑在首页显示）
     ],
     "sign_url_template": "https://www.kxdao.net/plugin.php?id=dsu_amupper&ppersubmit=true&formhash={formhash}&infloat=yes&handlekey=dsu_amupper&inajax=1&ajaxtarget=fwin_content_dsu_amupper",
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
@@ -48,55 +47,82 @@ KEYWORDS = {
     "error": {"失败", "错误", "超时", "无权", "失效", "拒绝"}
 }
 
-# 用户名提取正则（扩展更多可能的标签格式）
-USERNAME_PATTERNS = [
-    r'<strong class="vwmy qq"><a href="space-uid-[\d]+\.html"[^>]+title="访问我的空间">([^<]+)</a></strong>',
-    r'<a class="vwmy" href="space-uid-[\d]+\.html"[^>]+>([^<]+)</a>',  # 常见的用户名链接格式
-    r'<span class="userinfo">([^<]+)</span>',  # 通用用户信息标签
-    r'<div class="username">([^<]+)</div>'   # 用户名容器标签
-]
+# 用户名提取正则（精准匹配：<div class="z">下的<a href="space-uid-xxx.html">用户名</a>）
+USERNAME_PATTERN = r'<div class="z">.*?<a href="space-uid-[\d]+\.html">([^<]+)</a>.*?</div>'
 
 
 # ==================== 核心功能函数 ====================
 def get_username(headers):
-    """多URL+多正则匹配提取用户名，增强容错性"""
+    """精准提取：匹配<div class="z">下的用户名标签"""
     try:
-        # 尝试所有可能的个人空间URL
-        for url in CONFIG["space_url_candidates"]:
+        # 1. 先从广播页提取（HTML片段中明确的路径）
+        # 动态构造广播页URL（需先获取当前用户UID，从Cookie或首页提取）
+        uid = get_user_uid(headers)
+        if uid:
+            follow_url = f"https://www.kxdao.net/home.php?mod=follow&uid={uid}&do=view&from=space"
             try:
-                response = requests.get(url, headers=headers, timeout=CONFIG["request_timeout"])
-                if response.status_code != 200:
-                    continue  # 跳过非200的URL
+                response = requests.get(follow_url, headers=headers, timeout=CONFIG["request_timeout"])
                 response.encoding = response.apparent_encoding
-                
-                # 尝试所有可能的用户名正则
-                for pattern in USERNAME_PATTERNS:
-                    match = re.search(pattern, response.text, re.IGNORECASE)
+                if response.status_code == 200:
+                    match = re.search(USERNAME_PATTERN, response.text, re.DOTALL | re.IGNORECASE)
                     if match:
                         username = match.group(1).strip()
-                        print(f"✅ 从{url}提取到用户名：{username}")
+                        print(f"✅ 从广播页提取到用户名：{username}")
                         return username
             except Exception as e:
-                print(f"⚠️ 尝试{url}提取用户名失败：{str(e)}")
-                continue
+                print(f"⚠️ 尝试广播页提取用户名失败：{str(e)}")
         
-        # 最后尝试从签到插件页提取
+        # 2. 尝试首页（若面包屑导航在首页显示）
         try:
-            response = requests.get(CONFIG["plugin_url"], headers=headers, timeout=CONFIG["request_timeout"])
+            response = requests.get(CONFIG["index_url"], headers=headers, timeout=CONFIG["request_timeout"])
             response.encoding = response.apparent_encoding
-            for pattern in USERNAME_PATTERNS:
-                match = re.search(pattern, response.text, re.IGNORECASE)
-                if match:
-                    username = match.group(1).strip()
-                    print(f"✅ 从签到插件页提取到用户名：{username}")
-                    return username
+            match = re.search(USERNAME_PATTERN, response.text, re.DOTALL | re.IGNORECASE)
+            if match:
+                username = match.group(1).strip()
+                print(f"✅ 从首页提取到用户名：{username}")
+                return username
         except Exception as e:
-            print(f"⚠️ 从签到插件页提取用户名失败：{str(e)}")
+            print(f"⚠️ 尝试首页提取用户名失败：{str(e)}")
+        
+        # 3. 尝试通用个人中心页
+        try:
+            response = requests.get("https://www.kxdao.net/home.php", headers=headers, timeout=CONFIG["request_timeout"])
+            response.encoding = response.apparent_encoding
+            match = re.search(USERNAME_PATTERN, response.text, re.DOTALL | re.IGNORECASE)
+            if match:
+                username = match.group(1).strip()
+                print(f"✅ 从个人中心页提取到用户名：{username}")
+                return username
+        except Exception as e:
+            print(f"⚠️ 尝试个人中心页提取用户名失败：{str(e)}")
         
         # 所有尝试失败
         return None
     except Exception as e:
         print(f"⚠️ 获取用户名失败：{str(e)}（将使用账号序号）")
+        return None
+
+
+def get_user_uid(headers):
+    """从Cookie或首页提取当前用户UID（用于构造广播页URL）"""
+    try:
+        # 优先从Cookie提取（部分论坛Cookie含UID）
+        cookie_str = headers.get("Cookie", "")
+        uid_match = re.search(r'uid=([\d]+)', cookie_str, re.IGNORECASE)
+        if uid_match:
+            return uid_match.group(1)
+        
+        # 从首页HTML提取（匹配space-uid-xxx.html中的UID）
+        response = requests.get(CONFIG["index_url"], headers=headers, timeout=CONFIG["request_timeout"])
+        response.encoding = response.apparent_encoding
+        uid_match = re.search(r'space-uid-([\d]+)\.html', response.text, re.IGNORECASE)
+        if uid_match:
+            return uid_match.group(1)
+        
+        print("⚠️ 未提取到用户UID，无法构造精准广播页URL")
+        return None
+    except Exception as e:
+        print(f"⚠️ 获取用户UID失败：{str(e)}")
         return None
 
 
@@ -167,7 +193,7 @@ def parse_sign_result(html_content):
 
 
 def process_single_account(account_idx, cookie):
-    """处理单个账号"""
+    """处理单个账号（精准提取用户名）"""
     try:
         delay = random.randint(*CONFIG["sleep_range"])
         print(f"随机延迟{delay}秒...")
@@ -185,6 +211,7 @@ def process_single_account(account_idx, cookie):
             "Accept-Language": "zh-CN,zh;q=0.9"
         }
         
+        # 精准提取用户名
         username = get_username(headers)
         account_name = username if username else f"第{account_idx}个账号"
         print(f"当前账号：{account_name}")
