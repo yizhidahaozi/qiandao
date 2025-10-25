@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#修改时间：2025年10月21日16点11分
+#修改时间：2025年10月25日
 # -*- coding: utf-8 -*-
 
 """
@@ -117,9 +117,9 @@ for cookie in cookies.split("&"):
         # 匹配class="kmuser"的<a>标签内的所有内容
         user_match = re.search(r'<a[^>]+class="kmuser"[^>]*>(.*?)</a>', user_resp.text)
         if user_match:
-            username_raw = user_match.group(1)。strip()
+            username_raw = user_match.group(1).strip()  # 已修正：中文句号改为英文句号
             # 清理<img>标签，只保留纯文字
-            username = re.sub(r'<img[^>]+>'， '', username_raw).strip()  
+            username = re.sub(r'<img[^>]+>', '', username_raw).strip()  # 已修正：中文逗号改为英文逗号
             print(f"✅ 用户名获取成功：{username}")
         else:
             print(f"⚠️ 未识别到用户名，将使用默认编号")
