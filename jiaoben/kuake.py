@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -- coding: utf-8 -- 
 # -------------------------------
-# @Author : github@wd210010 https://github.com/wd210010/only_for_happly
+# @Author : github@wd210010 https://github.com/wd210010/only_for_happly /https://github.com/wd210010/only_for_happly/blob/main/kuake.py
 # @Time : 2024/5/4 16:23
 # -------------------------------
 # cron "0 0 2 * * *" script-path=xxx.py,tag=匹配cron用
