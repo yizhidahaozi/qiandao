@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# 修改时间2025年10月25日
+# 二次修改时间2025年10月25日
+# 原来自 https://github.com/wd210010/only_for_happly/blob/main/enshan.py
 # -*- coding: utf-8 -*-
 """
 File: enshan_final_sign.py
