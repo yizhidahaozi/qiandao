@@ -1,4 +1,5 @@
-# 来自吾爱论坛，在原作者的基础上把推送消息换成了青龙自带的通知，修复了脚本在青龙容器运行不会自动停止的bug，如有侵权请告知，将立即删除。
+# 来自https://github.com/wd210010/only_for_happly/blob/main/tyyun.py 
+# 吾爱论坛，在原作者的基础上把推送消息换成了青龙自带的通知，修复了脚本在青龙容器运行不会自动停止的bug，如有侵权请告知，将立即删除。
 # 修改时间 2025年10月25日
 # @author Sten
 # 转自仓库:https://github.com/aefa6/QinglongScript.git
