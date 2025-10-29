@@ -2,7 +2,7 @@
 # -- coding: utf-8 -- 
 # -------------------------------
 #修改时间：2025年10月21日16点11分
-# @Author : github@wd210010 https://github.com/wd210010/only_for_happly
+# @Author : github@wd210010 https://github.com/wd210010/only_for_happly  /https://github.com/wd210010/only_for_happly/blob/main/tieba.py
 # 整合通知功能：支持PushPlus和青龙面板通知（无冗余提醒版本）
 # -------------------------------
 # cron "15 20 6,15 * * *" script-path=xxx.py,tag=匹配cron用
