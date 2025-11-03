@@ -6,7 +6,7 @@
 # 感谢LeXrLt的提醒，无法运行的 https://e.dlife.cn/user/index.do ，打开上述网址登录后关闭设备锁即可继续使用签到脚本。
 # 觉得不错关注原作者
 # 关闭二次验证可完美运行登录签到  已删除报错抽奖功能
-# 关闭二次验证地址 https://e.dlife.cn/portal/web/index.html#/login 
+# 关闭二次验证地址 https://e.dlife.cn/portal/web/index.html#/login
 import notify
 import time
 import re
