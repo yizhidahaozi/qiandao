@@ -105,7 +105,7 @@ for cookie in cookies.split("&"):
         account_count += 1
         continue
 
-    # 提取用户名（适配class="kmuser"的标签结构，过滤<img>标签）
+    # 提取用户名（适配class="kmuser"的标签结构，过滤标签）
     username = f"账号{account_count}"  # 默认用编号
     try:
         print(f"🔍 第{account_count}个账号：正在获取用户名...")
@@ -117,9 +117,9 @@ for cookie in cookies.split("&"):
         # 匹配class="kmuser"的<a>标签内的所有内容
         user_match = re.search(r'<a[^>]+class="kmuser"[^>]*>(.*?)</a>', user_resp.text)
         if user_match:
-            username_raw = user_match.group(1).strip()  # 已修正：中文句号改为英文句号
-            # 清理<img>标签，只保留纯文字
-            username = re.sub(r'<img[^>]+>', '', username_raw).strip()  # 已修正：中文逗号改为英文逗号
+            username_raw = user_match.group(1).strip()
+            # 清理标签，只保留纯文字
+            username = re.sub(r']+>', '', username_raw).strip()
             print(f"✅ 用户名获取成功：{username}")
         else:
             print(f"⚠️ 未识别到用户名，将使用默认编号")
@@ -127,7 +127,7 @@ for cookie in cookies.split("&"):
         print(f"⚠️ 获取用户名失败（{str(e)}），将使用默认编号")
 
     # 执行签到请求
-    sign_url = f"https://bbs.binmt.cc/plugin.php?id=k_misign:sign&operation=qiandao&formhash={formhash}&format=empty&inajax=1&ajaxtarget="
+    sign_url = f"https://bbs.binmt.cc/k_misign-sign.html?operation=qiandao&formhash={formhash}&format=empty&inajax=1&ajaxtarget="
     try:
         print(f"📝 {username}：正在执行签到...")
         resp = requests.get(sign_url, headers=headers, timeout=15)
