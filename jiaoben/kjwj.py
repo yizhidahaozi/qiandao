@@ -10,7 +10,17 @@
 import requests
 import json
 import os
+import sys
 from requests.exceptions import RequestException
+
+# ========== 集成通知功能 ==========
+try:
+    from notify import send  # 导入青龙面板的多渠道通知函数
+except ImportError:
+    print("❌ 未找到通知脚本notify.py，请检查文件路径！")
+    # 定义一个空的send函数，避免脚本崩溃
+    def send(title, content):
+        print(f"\n【通知】{title}\n{content}")
 
 # 禁用请求警告
 requests.packages.urllib3.disable_warnings()
@@ -107,13 +117,20 @@ def kjwj_sign(username, password, index):
 
 if __name__ == '__main__':
     print("===== 科技玩家签到脚本开始执行 =====")
+    # 初始化签到结果列表
+    sign_results = []
     
     # 读取青龙环境变量（增加空值校验）
     username_str = os.getenv("kjwj_username", "")
     password_str = os.getenv("kjwj_password", "")
     
+    # 检查环境变量配置
     if not username_str or not password_str:
-        print("错误：未配置 kjwj_username 或 kjwj_password 环境变量！")
+        err_msg = "❌ 未配置 kjwj_username 或 kjwj_password 环境变量！"
+        print(err_msg)
+        sign_results.append(err_msg)
+        # 发送配置错误通知
+        send("科技玩家签到 - 配置错误", err_msg)
         exit(1)
     
     # 分割多账号（&分隔）
@@ -122,12 +139,35 @@ if __name__ == '__main__':
     
     # 校验账号密码数量是否匹配
     if len(kjwj_username) != len(kjwj_password):
-        print(f"错误：账号数量（{len(kjwj_username)}）与密码数量（{len(kjwj_password)}）不匹配！")
+        err_msg = f"❌ 账号数量（{len(kjwj_username)}）与密码数量（{len(kjwj_password)}）不匹配！"
+        print(err_msg)
+        sign_results.append(err_msg)
+        send("科技玩家签到 - 配置错误", err_msg)
         exit(1)
     
     # 批量执行签到
     for idx, (user, pwd) in enumerate(zip(kjwj_username, kjwj_password), 1):
-        result = kjwj_sign(user.strip(), pwd.strip(), idx)
+        # 清理账号密码两端空格
+        user = user.strip()
+        pwd = pwd.strip()
+        if not user or not pwd:
+            err_msg = f"❌ 第{idx}个账号：账号/密码为空"
+            print(err_msg)
+            sign_results.append(err_msg)
+            continue
+        
+        # 执行签到并收集结果
+        result = kjwj_sign(user, pwd, idx)
         print(result)
+        sign_results.append(result)
     
+    # 汇总结果并发送通知
     print("\n===== 科技玩家签到脚本执行结束 =====")
+    final_content = "\n".join(sign_results)
+    print(f"\n📋 签到结果汇总：\n{final_content}")
+    
+    # 发送多渠道通知
+    send(
+        title="科技玩家自动签到结果",
+        content=final_content
+    )
