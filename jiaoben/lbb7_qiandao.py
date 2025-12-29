@@ -2,75 +2,90 @@
 # -*- coding: utf-8 -*-
 
 """
-LBB7 单账号签到（访问触发兜底版）
+File: lbb7_qiandao.py
+Date: 2025/12/29
+cron: 23 8 * * *
+new Env('LBB7 每日签到');
 """
 
 import os
-import re
 import sys
 import time
+import random
 import requests
 
+# 青龙通知
 try:
     from notify import send
 except ImportError:
-    print("❌ notify.py 不存在")
-    sys.exit(1)
+    send = None
+    print("⚠ 未找到 notify.py，将不发送通知")
 
-COOKIE = os.getenv("LBB7_COOKIE", "").strip()
-if not COOKIE:
-    send("LBB7 签到失败", "❌ 未配置 Cookie")
-    sys.exit(1)
+# ================= 配置 =================
+SIGN_URL = "https://zhh.lbb7.cn/user/ajax_user.php?act=qiandao"
+REFERER = "https://zhh.lbb7.cn/user/qiandao.php"
+SLEEP_RANGE = (1, 3)
 
-BASE = "https://zhh.lbb7.cn/user"
-QIADAO = f"{BASE}/qiandao.php"
-RECORD = f"{BASE}/record.php"
+cookies_env = os.getenv("QD_COOKIE", "")
+# ========================================
 
-headers = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "zh-CN,zh;q=0.9",
-    "Cookie": COOKIE,
-}
-
-s = requests.Session()
-s.headers.update(headers)
-
-print("🚀 LBB7 单账号签到开始（访问触发模式）")
-
-# 1️⃣ 访问签到页
-try:
-    r = s.get(QIADAO, timeout=15)
-    r.raise_for_status()
-except Exception as e:
-    msg = f"❌ 签到页访问失败：{e}"
+if not cookies_env:
+    msg = "❌ QD_COOKIE 环境变量未配置"
     print(msg)
-    send("LBB7 签到失败", msg)
+    if send:
+        send("LBB7 签到失败", msg)
     sys.exit(1)
 
-time.sleep(2)
+cookies_list = [c.strip() for c in cookies_env.split("&") if c.strip()]
+results = []
 
-# 2️⃣ 查询收支明细，判断是否入账
-try:
-    r = s.get(RECORD, timeout=15)
-    text = r.text
-except Exception as e:
-    msg = f"❌ 收支页面访问失败：{e}"
+for idx, cookie in enumerate(cookies_list, start=1):
+    print(f"\n📌 开始第 {idx} 个账号签到")
+
+    sleep_time = random.randint(*SLEEP_RANGE)
+    print(f"⏳ 随机等待 {sleep_time} 秒")
+    time.sleep(sleep_time)
+
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Cookie": cookie,
+        "Referer": REFERER
+    }
+
+    try:
+        r = requests.get(SIGN_URL, headers=headers, timeout=10)
+
+        # Cookie 失效判断（核心、可靠）
+        if "login.php" in r.text:
+            msg = f"❌ 账号{idx}：Cookie 已失效"
+            print(msg)
+            results.append(msg)
+            continue
+
+        data = r.json()
+    except Exception as e:
+        msg = f"❌ 账号{idx}：请求异常（{e}）"
+        print(msg)
+        results.append(msg)
+        continue
+
+    # ===== 结果输出（只信任签到接口本身）=====
+    if data.get("code") == 0:
+        msg = f"✅ 账号{idx}：签到成功（已到账）"
+    else:
+        msg = f"📅 账号{idx}：{data.get('msg', '签到失败')}"
+
     print(msg)
-    send("LBB7 签到失败", msg)
-    sys.exit(1)
+    results.append(msg)
 
-# 3️⃣ 判断结果
-if "今日已签到" in text:
-    result = "📅 今日已签到"
-elif re.search(r"签到.*?([0-9]+\.[0-9]{1,2})元", text):
-    amount = re.search(r"签到.*?([0-9]+\.[0-9]{1,2})元", text).group(1)
-    result = f"🎉 签到成功，获得 {amount} 元"
-else:
-    result = "⚠️ 未检测到签到记录（可能 IP 已被占用）"
+# ================= 汇总 & 通知 =================
+final_text = "\n".join(results)
 
-print(result)
-send("LBB7 签到结果", result)
+print("\n📋 签到结果汇总：")
+print(final_text)
+
+if send:
+    send(
+        title="LBB7 每日签到结果",
+        content=final_text
+    )
