@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-#只能签到，获取到COOK后关闭网站，不可再去登录网站，否则cook会有变动，简单的说就是2选一。
-#只能单一账号运行，一个账号只能在一个IP运行。
+# 只能签到，获取到 Cookie 后关闭网站，不可再去登录网站
+# 单账号、单 IP 运行
 """
-LBB7 每日签到（单账号稳定版）
+LBB7 每日签到（单账号稳定版｜自动判断）
 cron: 35 8 * * *
 """
 
@@ -13,7 +13,7 @@ import time
 import random
 import requests
 
-# 通知
+# ================== 通知 ==================
 try:
     from notify import send
 except ImportError:
@@ -23,8 +23,8 @@ except ImportError:
 # ================== 配置区 ==================
 SIGN_URL = "https://zhh.lbb7.cn/user/ajax_user.php?act=qiandao"
 CHECK_URL = "https://zhh.lbb7.cn/user/"
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
-# ============================================
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36"
+# ===========================================
 
 cookie = os.environ.get("LBB7_COOKIE", "").strip()
 
@@ -34,21 +34,34 @@ if not cookie:
     send("LBB7 签到失败", msg)
     sys.exit(1)
 
+# ======== 关键：完整 AJAX Header ========
 headers = {
     "User-Agent": UA,
     "Cookie": cookie,
-    "Referer": "https://zhh.lbb7.cn/user/qiandao.php"
+    "Referer": "https://zhh.lbb7.cn/user/qiandao.php",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest",
 }
 
 print("📌 开始 LBB7 每日签到")
 
-# 随机延迟，避免风控
+# 随机延迟，降低风控
 sleep_time = random.randint(1, 3)
 print(f"⏳ 随机等待 {sleep_time} 秒")
 time.sleep(sleep_time)
 
 session = requests.Session()
 session.headers.update(headers)
+
+
+# === 补齐 AJAX 关键头（仅用于签到接口识别）===
+session.headers.update({
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest"
+})
+
+
+
 
 # ================== Cookie 校验 ==================
 try:
@@ -64,15 +77,26 @@ except Exception as e:
     send("LBB7 签到异常", msg)
     sys.exit(1)
 
-# ================== 执行签到 ==================
+# ================== 执行签到（自动判断） ==================
 try:
     resp = session.get(SIGN_URL, timeout=10)
-    data = resp.json()
 
+    try:
+        data = resp.json()
+    except ValueError:
+        raise Exception("返回内容非 JSON，可能触发风控")
+
+    msg_text = data.get("msg", "")
+
+    # ===== 自动判断逻辑 =====
     if data.get("code") == 0:
-        msg = f"🎉 签到成功：{data.get('msg')}"
+        msg = f"🎉 签到成功：{msg_text}"
+
+    elif any(k in msg_text for k in ["已签到", "今天", "重复"]):
+        msg = f"✅ 今日已签到：{msg_text}"
+
     else:
-        msg = f"📅 {data.get('msg')}"
+        msg = f"⚠️ 签到失败：{msg_text}"
 
     print(msg)
     send("LBB7 每日签到结果", msg)
