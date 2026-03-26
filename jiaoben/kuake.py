@@ -2,12 +2,16 @@
 # -- coding: utf-8 -- 
 # -------------------------------
 # @Author : github@wd210010 https://github.com/wd210010/only_for_happly /https://github.com/wd210010/only_for_happly/blob/main/kuake.py
-# @Time : 2024/5/4 16:23
+
 # -------------------------------
-# cron "0 0 2 * * *" script-path=xxx.py,tag=匹配cron用
-# const $ = new Env('夸克签到')
+#  script-path=xxx.py,tag=匹配cron用
 #搬运至https://github.com/BNDou/Auto_Check_In
 #抓包浏览器访问-https://pan.quark.cn/ 并登录 抓取cookie全部 填入青龙变量 环境变量名为 COOKIE_QUARK，多账户用 回车 或 && 分开 
+
+"""
+cron: 45 7 * * *
+new Env('夸克签到签到');
+"""
 
 import os
 import re
