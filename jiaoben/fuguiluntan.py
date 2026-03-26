@@ -1,7 +1,12 @@
 #!/usr/bin/python3
 # 定制版：ID 1231-1253 + 7天评论一次 + 每次1条
-# const $ = new Env('富贵论坛')
 # -- coding: utf-8 --
+
+"""
+cron: 25 7 * * *
+new Env('富贵论坛签到');
+"""
+
 
 import requests
 import re
