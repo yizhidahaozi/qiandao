@@ -3,8 +3,14 @@
 # -------------------------------
 # 百度贴吧签到 终极编码修复版
 # -------------------------------
-# cron "15 20 6,15 * * *" script-path=xxx.py
-# const $ = new Env('百度贴吧')
+#  script-path=xxx.py
+# 环境变量 tieback = BAIDUID_BFESS=******
+
+"""
+cron "15 20 6,15 * * *
+new Env('百度贴吧签到');
+"""
+
 
 import hashlib
 import re
