@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 #修改时间 2025年10月25日14:00（北京时间）  # 优化用户名提取路径
 #来自 https://github.com/HeiDaotu/WFRobertQL/blob/main/kxdao.py
+# const $ = new Env('科学刀论坛')
 # -*- coding: utf-8 -*-
 """科学刀论坛自动签到脚本
 功能：多账号签到、显示用户名、自动识别重复签到、异常处理、结果通知
