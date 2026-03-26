@@ -7,7 +7,7 @@
 File: AcFun_auto_sign.py
 Author: Auto-Sign
 Date: 2025/10/19
-cron: 35 8 * * *
+cron: 05 7 * * *
 new Env('AcFun自动签到');
 """
 import json
