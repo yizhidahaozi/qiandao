@@ -3,9 +3,14 @@
 # Date: 2024-12-16
 # export app_hlx="手机号#密码"
 # 换行 & 分割 
-# 功能:签到
-# cron: 18 8 * * *
-# new Env('葫芦侠三楼');
+# 功能:签到 ;
+
+"""
+cron: 15 8 * * *
+new Env('葫芦侠三楼签到');
+"""
+
+
 from notify import send
 
 import json
