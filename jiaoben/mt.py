@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 #修改时间：2025年10月25日
-# const $ = new Env('MT论坛')
 # -*- coding: utf-8 -*-
 
+"""
+cron: 01 7 * * *
+new Env('MT论坛签到');
+"""
 
 import requests
 import re
