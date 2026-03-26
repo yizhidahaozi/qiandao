@@ -7,6 +7,12 @@
 # 觉得不错关注原作者
 # 关闭二次验证可完美运行登录签到  已删除报错抽奖功能
 # 关闭二次验证地址 https://e.dlife.cn/portal/web/index.html#/login
+
+"""
+cron: 15 9 * * *
+new Env('天翼云签到');
+"""
+
 import notify
 import time
 import re
