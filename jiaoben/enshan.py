@@ -3,9 +3,7 @@
 # -*- coding: utf-8 -*-
 
 """
-File: enshan.py(恩山无线论坛签到)
-Author: Custom
-cron: 30 7 * * *
+cron: 15 7 * * *
 new Env('恩山无线论坛签到');
 """
 from time import sleep
