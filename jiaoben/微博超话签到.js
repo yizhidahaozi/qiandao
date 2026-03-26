@@ -34,6 +34,13 @@ const GLOBAL_CONFIG = {
     }
 };
 
+
+"""
+cron: 35 9 * * *
+new Env('微博超话签到');
+"""
+
+
 // ==================== 依赖与请求配置 ====================
 const axios = require('axios');
 const fs = require('fs');
