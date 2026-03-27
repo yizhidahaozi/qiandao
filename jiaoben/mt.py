@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-#修改时间：2025年10月25日
 # -*- coding: utf-8 -*-
-
 """
 cron: 01 7 * * *
 new Env('MT论坛签到');
@@ -15,111 +13,104 @@ import time
 import random
 import urllib.parse
 
+# 通知模块导入
 try:
     from notify import send
 except ImportError:
-    print("❌ 缺少 notify.py")
+    print("❌ 缺少 notify.py 文件，无法发送通知")
     sys.exit(1)
 
-BASE = "https://bbs.binmt.cc"
-cookies_env = os.environ.get("MT_COOKIE", "")
-results = []
+# 基础配置
+BASE_URL = "https://bbs.binmt.cc"
+COOKIE_ENV = os.environ.get("MT_COOKIE", "")
+RESULT_LIST = []
 
-if not cookies_env:
-    send("MT论坛签到", "❌ 未配置 MT_COOKIE")
+# 无Cookie直接退出
+if not COOKIE_ENV:
+    send("MT论坛签到", "❌ 未配置环境变量 MT_COOKIE")
     sys.exit(1)
 
-for idx, raw_cookie in enumerate(cookies_env.split("&"), start=1):
-
-    print(f"\n📌 开始处理第{idx}个账号")
-    time.sleep(random.randint(1, 2))
-
-    # -------- Cookie 处理 --------
-    raw_cookie = urllib.parse.unquote(raw_cookie)
-    cookie = ""
-    for kv in raw_cookie.split(";"):
-        kv = kv.strip()
-        if kv.startswith("cQWy_2132_saltkey=") or kv.startswith("cQWy_2132_auth="):
-            k, v = kv.split("=", 1)
-            cookie += f"{k}={urllib.parse.quote(v)}; "
-
-    if "saltkey" not in cookie or "auth" not in cookie:
-        msg = f"❌ 账号{idx}：Cookie 无效"
-        print(msg)
-        results.append(msg)
+# 遍历所有账号
+for index, cookie_str in enumerate(COOKIE_ENV.split("&"), 1):
+    print(f"\n====== 开始处理第 {index} 个账号 ======")
+    time.sleep(random.uniform(1, 3))  # 随机延时防检测
+    
+    # 1. 清洗并提取有效Cookie（只保留saltkey和auth）
+    cookie_str = urllib.parse.unquote(cookie_str).strip()
+    valid_cookie = []
+    for item in cookie_str.split(";"):
+        item = item.strip()
+        if item.startswith(("cQWy_2132_saltkey=", "cQWy_2132_auth=")):
+            valid_cookie.append(item)
+    
+    cookie = "; ".join(valid_cookie)
+    if not valid_cookie:
+        err_msg = f"❌ 账号{index}：Cookie 格式无效"
+        print(err_msg)
+        RESULT_LIST.append(err_msg)
         continue
 
+    # 请求头
     headers = {
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Cookie": cookie,
-        "Referer": BASE + "/"
+        "Referer": f"{BASE_URL}/",
+        "Accept": "text/html,application/xhtml+xml,*/*"
     }
 
-    # -------- 初始化：用户名 + formhash --------
     try:
-        page = requests.get(
-            f"{BASE}/plugin.php?id=k_misign:sign",
-            headers=headers,
-            timeout=15
-        )
-        page.raise_for_status()
+        # 2. 获取页面信息 + formhash
+        resp = requests.get(f"{BASE_URL}/plugin.php?id=k_misign:sign", headers=headers, timeout=20)
+        resp.raise_for_status()
+        html = resp.text
 
-        m_user = re.search(r'class="kmuser".*?<span>(.*?)</span>', page.text, re.S)
-        username = m_user.group(1).strip() if m_user else f"账号{idx}"
-        print(f"✅ 用户名：{username}")
+        # 提取用户名
+        user_match = re.search(r'class="kmuser".*?<span>(.*?)</span>', html, re.S)
+        username = user_match.group(1).strip() if user_match else f"账号{index}"
 
-        m_hash = re.search(r'formhash=([a-f0-9]{8})', page.text)
-        if not m_hash:
-            msg = f"❌ {username}：未获取到 formhash"
-            print(msg)
-            results.append(msg)
+        # 提取formhash
+        hash_match = re.search(r'formhash=([a-f0-9]{8})', html)
+        if not hash_match:
+            err_msg = f"❌ {username}：获取 formhash 失败"
+            print(err_msg)
+            RESULT_LIST.append(err_msg)
             continue
+        formhash = hash_match.group(1)
 
-        formhash = m_hash.group(1)
+        # 3. 执行签到
+        sign_url = f"{BASE_URL}/plugin.php?id=k_misign:sign&operation=qiandao&formhash={formhash}&format=empty"
+        sign_resp = requests.get(sign_url, headers=headers, timeout=20)
+        sign_resp.raise_for_status()
+        res_text = sign_resp.text.strip()
 
-    except Exception as e:
-        msg = f"❌ 账号{idx}：初始化失败 {e}"
-        print(msg)
-        results.append(msg)
-        continue
-
-    # -------- 执行签到 --------
-    sign_url = (
-        f"{BASE}/plugin.php"
-        f"?id=k_misign:sign"
-        f"&operation=qiandao"
-        f"&formhash={formhash}"
-        f"&format=empty"
-    )
-
-    try:
-        print(f"📝 {username}：执行签到中...")
-        r = requests.get(sign_url, headers=headers, timeout=15)
-        r.raise_for_status()
-
-        txt = r.text.strip()
-
-        # ✅ 关键修复点：空内容 = 成功
-        if txt == "":
-            msg = f"🎊 {username}：签到成功"
-        elif "已签" in txt:
-            msg = f"📅 {username}：今日已签到"
-        elif "登录" in txt:
-            msg = f"❌ {username}：Cookie 已失效"
+        # 4. 签到结果判断
+        if res_text == "":
+            msg = f"✅ {username}：签到成功"
+        elif "今日已签" in res_text or "已签到" in res_text:
+            msg = f"ℹ️ {username}：今日已签到"
+        elif "登录" in res_text or "失效" in res_text:
+            msg = f"❌ {username}：Cookie 已失效，请重新获取"
         else:
-            clean = re.sub(r'<.*?>', '', txt).strip()
-            msg = f"ℹ️ {username}：{clean}"
+            # 清理HTML标签，纯文本展示
+            res_text = re.sub(r'<[^>]+>', '', res_text).strip()
+            msg = f"ℹ️ {username}：{res_text}"
 
         print(msg)
-        results.append(msg)
+        RESULT_LIST.append(msg)
 
+    except requests.exceptions.RequestException as e:
+        err_msg = f"❌ 账号{index}：网络请求失败 ({str(e)[:30]})"
+        print(err_msg)
+        RESULT_LIST.append(err_msg)
     except Exception as e:
-        msg = f"❌ {username}：请求异常 {e}"
-        print(msg)
-        results.append(msg)
+        err_msg = f"❌ 账号{index}：未知错误 ({str(e)[:30]})"
+        print(err_msg)
+        RESULT_LIST.append(err_msg)
 
-# -------- 推送 --------
-final = "\n".join(results)
-print("\n📋 签到结果汇总：")
-print(final)
-send("MT论坛自动签到结果", final)
+# 结果汇总推送
+final_result = "\n".join(RESULT_LIST)
+print("\n" + "="*30)
+print("📊 MT论坛签到结果汇总")
+print("="*30)
+print(final_result)
+send("MT论坛自动签到", final_result)
