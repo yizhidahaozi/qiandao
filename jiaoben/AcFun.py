@@ -166,7 +166,7 @@ class AcFun(CheckIn):
         if not cookies:
             return {"name": "📤 分享任务", "value": "❌ 缺少Cookies（未获取到登录状态）"}
         
-        url = "https://api-ipv6.acfunchina.com/rest/app/task/reportTaskAction?taskType=1&market=tencent&product=ACFUN_APP&appMode=0"
+        url = "https://api.acfunchina.com/rest/app/task/reportTaskAction?taskType=1&market=tencent&product=ACFUN_APP&appMode=0"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         try:
             response = session.get(
